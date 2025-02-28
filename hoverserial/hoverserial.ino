@@ -44,7 +44,7 @@
 #define SPEED_STEP_DOWN 300
 #define DEBUG_RX // [-] Debug received data. Prints all bytes to serial (comment-out to disable)
 
-#define BUTTON_PIN 18
+#define BUTTON_PIN GPIO_NUM_18
 #define BUTTON_DEBOUNCE_INTERVAL 100 // Milliseconds
 
 #define POT_MIDDLE 1850
@@ -113,8 +113,7 @@ void setup()
   // HoverSerial.begin(HOVER_SERIAL_BAUD);
   pinMode(LED_BUILTIN, OUTPUT);
   Button *modeBtn = new Button(BUTTON_PIN, true);
-  modeBtn->setParam
-      modeBtn->attachSingleClickEventCb(&onModeBtnSingleClickEventCb, NULL);
+  modeBtn->attachSingleClickEventCb(&onModeBtnSingleClickEventCb, NULL);
   modeBtn->attachLongPressStartEventCb(&onModeBtnLongPressStartEventCb, NULL);
 }
 
