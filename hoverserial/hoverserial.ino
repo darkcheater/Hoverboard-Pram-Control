@@ -24,23 +24,28 @@
 //   // #define DEBUG_SERIAL_USART2
 // *******************************************************************
 
-#include <AcksenButton.h>
+#include "Button.h"
 
 // ########################## DEFINES ##########################
-#define HOVER_SERIAL_BAUD 115200  // [-] Baud rate for HoverSerial (used to communicate with the hoverboard)
-#define SERIAL_BAUD 115200        // [-] Baud rate for built-in Serial (used for the Serial Monitor)
-#define START_FRAME 0xABCD        // [-] Start frme definition for reliable serial communication
-#define TIME_SEND 100             // [ms] Sending time interval
-#define TIME_SEND_DEBUG 1000             // [ms] Sending time interval
-#define SPEED_MAX_MODE0 300        // [-] Maximum speed for testing
-#define SPEED_MAX_MODE1 600        // [-] Maximum speed for testing
-#define SPEED_MAX_MODE2 1500        // [-] Maximum speed for testing
-#define SPEED_STEP 100             // [-] Speed step
+#define HOVER_SERIAL_BAUD 115200 // [-] Baud rate for HoverSerial (used to communicate with the hoverboard)
+#define SERIAL_BAUD 115200       // [-] Baud rate for built-in Serial (used for the Serial Monitor)
+#define START_FRAME 0xABCD       // [-] Start frme definition for reliable serial communication
+#define TIME_SEND 100            // [ms] Sending time interval
+#define TIME_SEND_DEBUG 1000     // [ms] Sending time interval
+
+#define SPEED_MAX_MODE0 800  // [-] Maximum speed for testing
+#define SPEED_MAX_MODE1 1000 // [-] Maximum speed for testing
+#define SPEED_MAX_MODE2 1200 // [-] Maximum speed for testing
+#define SPEED_MAX_MODE3 1400 // [-] Maximum speed for testing
+
+#define MODE_COUNT 4
+
+#define SPEED_STEP 100 // [-] Speed step
 #define SPEED_STEP_DOWN 300
-#define DEBUG_RX                        // [-] Debug received data. Prints all bytes to serial (comment-out to disable)
+#define DEBUG_RX // [-] Debug received data. Prints all bytes to serial (comment-out to disable)
 
 #define BUTTON_PIN 18
-#define BUTTON_DEBOUNCE_INTERVAL				100 // Milliseconds
+#define BUTTON_DEBOUNCE_INTERVAL 100 // Milliseconds
 
 #define POT_MIDDLE 1850
 #define POT_DEADBAND 400
@@ -49,19 +54,19 @@
 #define DEBUG false
 
 #include <SoftwareSerial.h>
-//SoftwareSerial HoverSerial(16,17);        // RX, TX
-
+// SoftwareSerial HoverSerial(16,17);        // RX, TX
 
 HardwareSerial HoverSerial(2);
 
 // Global variables
-uint8_t idx = 0;         // Index for new data pointer
-uint16_t bufStartFrame;  // Buffer Start Frame
-byte *p;                 // Pointer declaration for the new received data
+uint8_t idx = 0;        // Index for new data pointer
+uint16_t bufStartFrame; // Buffer Start Frame
+byte *p;                // Pointer declaration for the new received data
 byte incomingByte;
 byte incomingBytePrev;
 
-typedef struct {
+typedef struct
+{
   uint16_t start;
   int16_t steer;
   int16_t speed;
@@ -69,7 +74,8 @@ typedef struct {
 } SerialCommand;
 SerialCommand Command;
 
-typedef struct {
+typedef struct
+{
   uint16_t start;
   int16_t cmd1;
   int16_t cmd2;
@@ -83,20 +89,38 @@ typedef struct {
 SerialFeedback Feedback;
 SerialFeedback NewFeedback;
 
-AcksenButton btnBasicButton	=	AcksenButton(BUTTON_PIN, ACKSEN_BUTTON_MODE_NORMAL, BUTTON_DEBOUNCE_INTERVAL, INPUT_PULLUP);
+int mode = 0;
+
+static void onModeBtnSingleClickEventCb(void *button_handle, void *usr_data)
+{
+  Serial.println("Button single click");
+  mode++;
+}
+
+static void onModeBtnLongPressStartEventCb(void *button_handle, void *usr_data)
+{
+  Serial.println("Button long press start");
+  mode--;
+}
 
 // ########################## SETUP ##########################
-void setup() {
+void setup()
+{
   Serial.begin(SERIAL_BAUD);
   Serial.println("Hoverboard Serial v1.0");
   // 16=rx, 17=tx
   HoverSerial.begin(HOVER_SERIAL_BAUD, SERIAL_8N1, 16, 17);
-  //HoverSerial.begin(HOVER_SERIAL_BAUD);
+  // HoverSerial.begin(HOVER_SERIAL_BAUD);
   pinMode(LED_BUILTIN, OUTPUT);
+  Button *modeBtn = new Button(BUTTON_PIN, true);
+  modeBtn->setParam
+      modeBtn->attachSingleClickEventCb(&onModeBtnSingleClickEventCb, NULL);
+  modeBtn->attachLongPressStartEventCb(&onModeBtnLongPressStartEventCb, NULL);
 }
 
 // ########################## SEND ##########################
-void Send(int16_t uSteer, int16_t uSpeed) {
+void Send(int16_t uSteer, int16_t uSpeed)
+{
   // Create command
   Command.start = (uint16_t)START_FRAME;
   Command.steer = (int16_t)uSteer;
@@ -108,12 +132,16 @@ void Send(int16_t uSteer, int16_t uSpeed) {
 }
 
 // ########################## RECEIVE ##########################
-void Receive() {
+void Receive()
+{
   // Check for new data availability in the Serial buffer
-  if (HoverSerial.available()) {
-    incomingByte = HoverSerial.read();                                   // Read the incoming byte
-    bufStartFrame = ((uint16_t)(incomingByte) << 8) | incomingBytePrev;  // Construct the start frame
-  } else {
+  if (HoverSerial.available())
+  {
+    incomingByte = HoverSerial.read();                                  // Read the incoming byte
+    bufStartFrame = ((uint16_t)(incomingByte) << 8) | incomingBytePrev; // Construct the start frame
+  }
+  else
+  {
     return;
   }
 
@@ -124,24 +152,28 @@ void Receive() {
 #endif
 
   // Copy received data
-  if (bufStartFrame == START_FRAME) {  // Initialize if new data is detected
+  if (bufStartFrame == START_FRAME)
+  { // Initialize if new data is detected
     p = (byte *)&NewFeedback;
     *p++ = incomingBytePrev;
     *p++ = incomingByte;
     idx = 2;
-  } else if (idx >= 2 && idx < sizeof(SerialFeedback)) {  // Save the new received data
+  }
+  else if (idx >= 2 && idx < sizeof(SerialFeedback))
+  { // Save the new received data
     *p++ = incomingByte;
     idx++;
   }
 
   // Check if we reached the end of the package
-  if (idx == sizeof(SerialFeedback)) {
+  if (idx == sizeof(SerialFeedback))
+  {
     uint16_t checksum;
-    checksum = (uint16_t)(NewFeedback.start ^ NewFeedback.cmd1 ^ NewFeedback.cmd2 ^ NewFeedback.speedR_meas ^ NewFeedback.speedL_meas
-                          ^ NewFeedback.batVoltage ^ NewFeedback.boardTemp ^ NewFeedback.cmdLed);
+    checksum = (uint16_t)(NewFeedback.start ^ NewFeedback.cmd1 ^ NewFeedback.cmd2 ^ NewFeedback.speedR_meas ^ NewFeedback.speedL_meas ^ NewFeedback.batVoltage ^ NewFeedback.boardTemp ^ NewFeedback.cmdLed);
 
     // Check validity of the new data
-    if (NewFeedback.start == START_FRAME && checksum == NewFeedback.checksum) {
+    if (NewFeedback.start == START_FRAME && checksum == NewFeedback.checksum)
+    {
       // Copy the new data
       memcpy(&Feedback, &NewFeedback, sizeof(SerialFeedback));
 
@@ -160,10 +192,12 @@ void Receive() {
       Serial.print(Feedback.boardTemp);
       Serial.print(" 7: ");
       Serial.println(Feedback.cmdLed);
-    } else {
+    }
+    else
+    {
       Serial.println("Non-valid data skipped");
     }
-    idx = 0;  // Reset the index (it prevents to enter in this if condition in the next cycle)
+    idx = 0; // Reset the index (it prevents to enter in this if condition in the next cycle)
   }
 
   // Update previous states
@@ -181,79 +215,50 @@ bool switchedxFlag = false;
 int speedCommand = 0;
 int speedStep = SPEED_STEP;
 int maxSpeed = SPEED_MAX_MODE0;
-int mode = 0;
 
 uint x = 0;
 uint y = 0;
 
 bool buttonPressed = false;
 
-void loop(void) {
+void loop(void)
+{
   unsigned long timeNow = millis();
 
   // Check for new received data
   Receive();
 
-  // update button
-  btnBasicButton.refreshStatus();
   // update potis
   x = analogRead(32);
   y = analogRead(33);
 
-  if((x > POT_MIDDLE + POT_DEADBAND || x < POT_MIDDLE - POT_DEADBAND)  && !debouncingPotxActive) {
-    // start "debouncing pot x"
-    Serial.println("Start debouncing");
-    debouncingPotxActive = true;
-    iTimePotx = timeNow + POT_DEBOUNCE;
-  }
-  if(x <= POT_MIDDLE + POT_DEADBAND && x >= POT_MIDDLE - POT_DEADBAND && debouncingPotxActive) {
-    Serial.println("debouncing failed");
-    debouncingPotxActive = false;
-    iTimePotx = 4294967295;
-    switchedxFlag = false;
-  }
+  // constrain mode
+  constrain(mode, 0, MODE_COUNT - 1);
 
-  if((timeNow > iTimePotx) && !switchedxFlag) {
-    Serial.println("mode switch started");
-    // mode change requested
-    switchedxFlag = true;
-    if(x > POT_MIDDLE + POT_DEADBAND) {
-      // mode up requested
-      mode++;
-    } else {
-      // mode down requested
-      mode--;
-    }
-    
-    switch (mode) {
-      case 0:
-        maxSpeed = SPEED_MAX_MODE0;
-        break;
-      case 1:
-        maxSpeed = SPEED_MAX_MODE1;
-        break;
-      case 2:
-        maxSpeed = SPEED_MAX_MODE2;
-        break;
-      default:
-        mode = 0;
-        maxSpeed = SPEED_MAX_MODE0;
-    }
-    Serial.println("Mode: " + String(mode));
+  switch (mode)
+  {
+  case 0:
+    maxSpeed = SPEED_MAX_MODE0;
+    break;
+  case 1:
+    maxSpeed = SPEED_MAX_MODE1;
+    break;
+  case 2:
+    maxSpeed = SPEED_MAX_MODE2;
+    break;
+  case 3:
+    maxSpeed = SPEED_MAX_MODE3;
+    break;
+  default:
+    mode = 0;
+    maxSpeed = SPEED_MAX_MODE0;
   }
+  Serial.println("Mode: " + String(mode));
 
-	if (btnBasicButton.onPressed() == true)
-	{
-		Serial.println("***Button Released!");
-    buttonPressed = false;
-	}
-  if (btnBasicButton.onReleased() == true)
-	{
-		Serial.println("***Button Pressed!");
-    buttonPressed = true;
-	}
-  if(DEBUG) {
-    if(timeNow > iTimeSendDebug) {
+  if (DEBUG)
+  {
+    if (timeNow > iTimeSendDebug)
+    {
       iTimeSendDebug = timeNow + TIME_SEND_DEBUG;
       Serial.println("x=" + String(x));
       Serial.println("y=" + String(y));
@@ -261,22 +266,24 @@ void loop(void) {
   }
 
   // Send commands
-  if (iTimeSendUart > timeNow) return;
+  if (iTimeSendUart > timeNow)
+    return;
   iTimeSendUart = timeNow + TIME_SEND;
   // limit speed
   speedCommand = constrain(speedCommand, 0, maxSpeed);
-  if(DEBUG)
+  if (DEBUG)
     Serial.println("speed=" + String(speedCommand));
   Send(0, speedCommand);
 
   // Calculate test command signal
-  if(buttonPressed) {
+  if (x > POT_MIDDLE + POT_DEADBAND)
+  {
     speedCommand += speedStep;
-  } else {
+  }
+  else
+  {
     speedCommand -= SPEED_STEP_DOWN;
   }
-  
-
 }
 
 // ########################## END ##########################
